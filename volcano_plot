@@ -1,0 +1,54 @@
+rm(list=ls())  #清空所有项目
+options(stringsAsFactors = F)  #加载环境
+#加载包
+library(ggplot2)
+#加载数据
+data <- read.csv("D-Mt_vs_D.all.annot.csv",header = T)
+#提取alldata中19-22列
+#data <- cbind(alldata[,19:22])
+#去掉NA
+data=na.omit(data)
+#设置阙值
+cut_off_pvalue = 0.05  #统计显著性
+cut_off_logFC = 2           #差异倍数值
+#添加一列UP.DOWN,STABLE信息
+data$change = ifelse(data$padj < cut_off_pvalue & abs(data$log2FoldChange) >= cut_off_logFC, 
+                   ifelse(data$log2FoldChange> cut_off_logFC ,'Up','Down'),
+                   'Stable')
+colnames(data)
+#按照padj进行从小到大排序
+data =data[order(data[,17]),]
+#命名第一列为行名
+rownames(data) <- data$gene_name
+#加一列，提取前十个基因名字，其余均为NA
+data$label = c(rownames(data)[1:10],rep(NA,(nrow(data)-10)))
+#画图
+ggplot(data,aes(log2FoldChange,-log10(padj)))+
+  #设置图片中pvalue阙值
+  geom_hline(yintercept = -log10(0.01),linetype="dashed",color = "#999999")+
+  #设置图片中log2fc阙值
+  geom_vline(xintercept = c(-2,+2),linetype="dashed",color = "#999999")+
+  #设置点的大小与颜色
+  geom_point(aes(size=-log10(padj),color=-log10(padj)))+
+  #设置点的渐变色
+  scale_color_gradientn(values = c(seq(0,1,0.2)),
+                        colors = c("#39489f","#39bbec","#f9ed36","#f38466","#b81f25"))+
+  #设置点的大小
+  scale_size_continuous(range = c(1,4))+
+  #去掉图片内参考虚线
+  theme_bw()+
+  #设置图例位置
+  theme(panel.grid = element_blank(),
+        legend.position = c(0.01,0.9),
+        legend.justification = c(0,1))+
+  #设置图例标题与有无
+  guides(col=guide_colorbar(title="-Log10_qvalue"),size="none")+
+  #添加显示点的信息与信息大小，颜色设置
+  geom_text(aes(label=label,color = -log10(padj),size=40,vjust=1,hjust=-0.1))+
+  #设置横纵坐标标题
+  xlab("Log2FC")+
+  ylab("-Log10(FDR qvalue)")+
+  #x轴显示（-10，10）
+  scale_x_continuous(limits = c(-10, 10))+
+  #x轴显示（0，160）
+  scale_y_continuous(limits = c(0, 160))
