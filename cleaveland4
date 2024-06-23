@@ -1,0 +1,14 @@
+#cds文件中不能有空格，去掉所有空格
+sed -i 's/[[:space:]]//g'  Mru.cds.fa 
+#所有文件都需要fa格式，将fq转换为fa
+seqtk seq -A freshdgd.fq.gz > mru.freshdgd.fa
+#运行CleaveLand4.pl
+CleaveLand4.pl -e mru.freshdgd.fa -u mru-mature.fa  -n Mru.sandai.fa -p 0.05 -t -o plot
+#-e 降解组文件
+#-u mirna文件
+#-n 基因文件
+#-p 设置0.01（高） 0.05 （中）1（低），默认1；
+#-c Cateogry设置 0..4（高..低），默认4；
+#-r 设置 0..1 （低..高），默认0.65
+#-t 输出结果为tab 制表符分割的格式
+#-o 输出每对miRNA与靶基因的剪切位点图片
