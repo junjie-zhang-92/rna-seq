@@ -1,0 +1,28 @@
+ls *gz |cut -d"_" -f 1|sort -u|while read id
+	do
+		trimmomatic PE -threads 18 -phred33 \
+		${id}_1.fastq.gz ${id}_2.fastq.gz \
+		../02_clean_read/${id}_1_paired.fastq.gz \
+		../02_clean_read/${id}_1_unpaired.fastq.gz \
+		../02_clean_read/${id}_2_paired.fastq.gz \
+		../02_clean_read/${id}_2_unpaired.fastq.gz \
+		ILLUMINACLIP:/users/fansh/anaconda3/envs/rna-seq/share/trimmomatic-0.39-1/adapters/TruSeq3-PE.fa:2:30:10 LEADING:10 TRAILING:10 SLIDINGWINDOW:5:10 MINLEN:50
+done
+hisat2_extract_exons.py Triticum_aestivum.IWGSC.48.gff3 >exons.txt 
+hisat2_extract_splice_sites.py Triticum_aestivum.IWGSC.48.gff3 >ss.txt 
+hisat2-build -p 4 --ss ss.txt --exon exons.txt Triticum_aestivum.IWGSC.dna.toplevel.fa genome 2>index.log
+ls *gz |cut -d"_" -f 1|sort -u|while read id; do 
+hisat2 -p 8 -x ../wheat/reference/genome -1 ../02_clean_read/${id}_1_paired.fastq.gz -2 ../02_clean_read/${id}_2_paired.fastq.gz 2>../03_bam/${id}.log |samtools sort >../03_bam/${id}.bam ;
+done
+featureCounts -a ../reference/wheat.gtf -F GTF -p -B -C -t exon -g transcript_id -T 8 -o ../featurecounts/bam_counts.all-2.1.txt *.bam 
+ls *.bam |cut -d"." -f 1|sort -u |while read id 
+do 
+  stringtie  -p 8 -G ../genome/Triticum_aestivum.IWGSC.48.gff3 -o ${id}.gtf -l ${id} ${id}.bam;
+done
+ls *gtf | grep -v '*gtf' |sort > mergelist.txt
+stringtie --merge -p 8 -G ../genome/Triticum_aestivum.IWGSC.48.gff3 -o stringtie_merge.gtf mergelist.txt
+gffcompare -r ../genome/Triticum_aestivum.IWGSC.48.gff3 -G stringtie_merge.gtf
+ls ../bam/*bam |cut -d"/" -f 3 |cut -d"." -f 1|sort -u |while read id
+do 
+  stringtie -e -B -p 8 -G stringtie_merge.gtf -o ./ballgown/${id}/${id}.gtf ../bam/${id}.bam;
+done
