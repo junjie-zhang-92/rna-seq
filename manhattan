@@ -1,0 +1,19 @@
+go1=read.table(file = "q.txt",header = TRUE)
+library("qqman")
+manhattan(go1)
+go3=read.table(file = "C:\\Users\\Dean\\Desktop\\s.txt",header = TRUE)
+manhattan(go3)
+manhattan(go3,chr="CHR",bp="BP",p="P",snp="SNP",suggestiveline=1,
+          chrlabs = c("1A","1B","1D","2A","2B","2D","3A","3B","3D","4A","4B","4D","5A","5B","5D","6A","6B","6D","7A","7B","7D","UN"),
+          col=c("red","blue","orange","yellow","green","purple","pink"),ylim=c(0,2))
+go4=read.table(file = "C:\\Users\\Dean\\Desktop\\a.txt",header = TRUE)
+manhattan(go4,chr="CHR",bp="BP",p="P",snp="SNP",suggestiveline=1.5,
+          chrlabs = c("1A","1B","1D","2A","2B","2D","3A","3B","3D","4A","4B","4D","5A","5B","5D","6A","6B","6D","7A","7B","7D","UN"),
+          col=c("red","blue","orange","yellow","green","purple","pink"),ylim=c(0,2))
+SEA::G4F2Fun()
+
+library(qqman)
+go1=read.table(file = "q.txt",header = TRUE)
+png('heatmap-2.png')
+manhattan(go1)
+dev.off()
