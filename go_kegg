@@ -1,0 +1,202 @@
+rm(list=ls())  #清空所有项目
+options(stringsAsFactors = F)  #加载环境
+#载入所有所需R包
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+#library(tidyverse)
+#数据转换宽数列到长数列
+#go.tsv-2.txt为interproscan结果，并将“|”替换为"\t"
+#go4<-read_delim("go.tsv-2.txt", "\t", 
+#               escape_double = FALSE, col_names = FALSE, 
+#               trim_ws = TRUE, show_col_types = FALSE)
+#go3<-gather(go3,gene,term,X2:X9,na.rm = TRUE)
+#write.table(go3,file = "go3.anno.txt",quote=F,col.name=F,sep ="\t",row.names=F)
+
+go <- read.delim("go.tsv-2.txt",header = F, na.strings="")
+go2<-gather(go,key="gene",value="term",V2:V9)
+go3<-go2[c('term','V1')]
+go4 <- unique(go3)
+go5 <- na.omit(go4)
+#write.table(go5,file = "go.anno.txt",quote=F,col.name=F,sep ="\t",row.names=F)
+#go注释
+#为直接注释补充为间接注释
+term2gene <- buildGOmap(go5)
+#将GoId转换为GoTerm
+go2term <- go2term(term2gene$GO)
+#将GoId转换为GoOnt
+go2ont <- go2ont(term2gene$GO)
+
+go.all <- merge(term2gene,go2term,by.x = "GO",by.y = "go_id")
+go.all2 <- merge(go.all,go2ont,by.x = "GO",by.y = "go_id")
+#write.table(go.all2,file = "go_gene.txt",quote=F,col.name=T,sep ="\t",row.names=F)
+genes <- read.delim('DEmiRNA-target-gene_id_CJ030.txt', stringsAsFactors = FALSE)$gene_id
+de <- DEmiRNA.target.gene_id_CJ030
+#go富集方法1
+gene <- de$gene_id
+df <- enricher(gene = gene,  #待富集的基因列表
+                    TERM2GENE = go[c('go_id', 'gene_id')],  #背景基因集
+                    TERM2NAME = go[c('go_id', 'go_term')], 
+                    pAdjustMethod = 'BH',  #指定 p 值校正方法
+                    pvalueCutoff = 0.05,  #指定 p 值阈值（可指定 1 以输出全部）
+                    qvalueCutoff = 0.05)  #指定 q 值阈值（可指定 1 以输出全部）
+#添加富集后的描述结果
+write.table(df, 'go_rich.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+tmp <- read.delim('go_rich2.txt')
+gene_GO <- go[!duplicated(go$go_id), ]
+tmp <- merge(tmp, gene_GO[c('go_id', 'go_ontology')],by.x = "ID",by.y = "go_id")
+tmp <- tmp[c(10, 1:9)]
+tmp <- tmp[order(tmp$go_ontology), ]
+write.table(tmp, 'go_rich2.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+  
+#画图
+df <- tmp
+#画柱形图
+ggplot(df, aes(Count,ID))+
+  geom_col(aes(fill = Description), width = 0.5, show.legend = FALSE)+
+  scale_fill_manual(values = c('#D06660', '#5AAD36', '#6C85F5')) +
+  facet_grid(Description~., scale = 'free_y', space = 'free_y') +
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'transparent')) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
+  coord_flip()+
+  labs(x = '', y = '')
+#GO 画气泡图
+ggplot(df, aes(x=Count, y=reorder(Description,Count)))+
+  geom_point(aes(size=Count,color=-log(qvalue))) +
+  scale_color_gradient(low = "green",high="red") +
+  scale_y_discrete(labels=function(x) str_wrap(x,width = 60))+
+  labs(x="Count",y="GO description") + labs(title="") +
+  theme(panel.grid=element_blank(),
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.line.x=element_line(size=0.4,colour = "black",linetype = "solid"),
+        axis.line.y=element_line(size=0.4,colour = "black",linetype = "solid"),
+        axis.ticks=element_line(size=0.4)) +
+  facet_grid(go_ontology~., scale = 'free_y', space = 'free_y')+
+  theme(axis.title = element_text(
+    family = "serif",##坐标轴标签字体
+    face='bold', ##字体外形（粗斜体等）
+    size=20, ##字体大小
+    lineheight = 1),##标签行间距的倍数
+    axis.text = element_text(
+      family = "serif",##字体
+      color="black",
+      size=10))
+
+##好  go
+   ggplot(df, aes(x=Count, y=reorder(Description,Count)))+
+   geom_point(aes(size=Count,color=-log(qvalue))) +
+    scale_size(range=c(2, 8))+
+    scale_colour_gradient(low = "blue",high = "red")+
+    theme_bw()+
+    ylab("GO description")+
+    xlab("Count")+
+    labs(color=expression(-log[10](PValue)))+
+    theme(legend.title=element_text(size=14), legend.text = element_text(size=14))+
+    theme(axis.title.y = element_text(margin = margin(r = 50)),axis.title.x = element_text(margin = margin(t = 20)))+
+    theme(axis.text.x = element_text(face ="bold",color="black",angle=0,vjust=1))+
+     theme(axis.title = element_text(
+       family = "serif",##坐标轴标签字体
+       face='bold', ##字体外形（粗斜体等）
+       size=20, ##字体大小
+       lineheight = 1),##标签行间距的倍数
+       axis.text = element_text(
+         family = "serif",##字体
+         color="black",
+         size=10))+
+     theme(panel.grid=element_blank(),
+           legend.background = element_blank(),
+           axis.line.x=element_line(size=0.2,colour = "black",linetype = "solid"),
+           axis.line.y=element_line(size=0.2,colour = "black",linetype = "solid"),
+           axis.ticks=element_line(size=0.4))+
+     facet_grid(go_ontology~., scale = 'free_y', space = 'free_y') #按照go_ontology进行分类
+   
+
+ggplot(df, aes(Count, -log10(p.adjust))) +
+  geom_col(aes(fill = go_ontology), width = 0.5, show.legend = FALSE) +
+  scale_fill_manual(values = c('#D06660', '#5AAD36', '#6C85F5')) +
+  facet_grid(go_ontology~., scale = 'free_y', space = 'free_y') +
+  theme(panel.grid = element_blank(), panel.background = element_rect(color = 'black', fill = 'Description')) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) + 
+  coord_flip() +
+  labs(x = '', y = '-Log10 P-Value\n')
+
+#KEGG 画气泡图
+df <- tmp
+ggplot(df, aes(x=Count, y=reorder(Description,Count)))+
+  geom_point(aes(size=Count,color=-log(qvalue))) +
+  scale_color_gradient(low = "green",high="red") +
+  scale_y_discrete(labels=function(x) str_wrap(x,width = 60))+
+  labs(x="Count",y="KEGG description") + labs(title="") +
+  theme(panel.grid=element_blank(),
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.line.x=element_line(size=0.4,colour = "black",linetype = "solid"),
+        axis.line.y=element_line(size=0.4,colour = "black",linetype = "solid"),
+        axis.ticks=element_line(size=0.4)) +
+  theme(axis.title = element_text(
+    family = "serif",##坐标轴标签字体
+    face='bold', ##字体外形（粗斜体等）
+    size=20, ##字体大小
+    lineheight = 1),##标签行间距的倍数
+    axis.text = element_text(
+      family = "serif",##字体
+      color="black",
+      size=10))
+
+
+
+
+#kegg富集
+
+library(clusterProfiler)
+
+#读取手动准备好的背景基因集
+gene_KEGG <- read.delim('gene_KEGG.txt', stringsAsFactors = FALSE)
+
+#读取基因列表文件中的基因名称
+genes <- read.delim('gene.txt', stringsAsFactors = FALSE)$gene_id
+
+#KEGG 富集分析
+kegg_rich <- enricher(gene = genes,  #待富集的基因列表
+                      TERM2GENE = gene_KEGG[c('pathway_id', 'gene_id')],  #背景基因集
+                      TERM2NAME = gene_KEGG[c('pathway_id', 'pathway_name')], 
+                      pAdjustMethod = 'BH',  #指定 p 值校正方法
+                      pvalueCutoff = 0.5,  #指定 p 值阈值（可指定 1 以输出全部）
+                      qvalueCutoff = 1)  #指定 q 值阈值（可指定 1 以输出全部）
+
+#输出富集结果
+#genes <- DEmiRNA.target.gene_id_CJ030$gene_id
+#gene_KEGG <- kegg
+write.table(kegg_rich, 'kegg_rich.txt', sep = '\t', row.names = FALSE, quote = FALSE)
+tmp <- read.delim('kegg_rich.txt')
+
+
+##好  go
+ggplot(tmp, aes(x=Count, y=reorder(Description,Count)))+
+  geom_point(aes(size=Count,color=-log(qvalue))) +
+  scale_size(range=c(2, 8))+
+  scale_colour_gradient(low = "blue",high = "red")+
+  theme_bw()+
+  ylab("KEGG description")+
+  xlab("Count")+
+  labs(color=expression(-log[10](PValue)))+
+  theme(legend.title=element_text(size=14), legend.text = element_text(size=14))+
+  theme(axis.title.y = element_text(margin = margin(r = 50)),axis.title.x = element_text(margin = margin(t = 20)))+
+  theme(axis.text.x = element_text(face ="bold",color="black",angle=0,vjust=1))+
+  theme(axis.title = element_text(
+    family = "serif",##坐标轴标签字体
+    face='bold', ##字体外形（粗斜体等）
+    size=20, ##字体大小
+    lineheight = 1),##标签行间距的倍数
+    axis.text = element_text(
+      family = "serif",##字体
+      color="black",
+      size=10))+
+  theme(panel.grid=element_blank(),
+        legend.background = element_blank(),
+        axis.line.x=element_line(size=0.2,colour = "black",linetype = "solid"),
+        axis.line.y=element_line(size=0.2,colour = "black",linetype = "solid"),
+        axis.ticks=element_line(size=0.4))
