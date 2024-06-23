@@ -1,0 +1,94 @@
+rm(list=ls())  #清空所有项目
+options(stringsAsFactors = F)  #加载环境
+library(DESeq2) 
+library("apeglm")
+getwd()
+setwd("E:/desktop/r/mqq")
+a <- read.csv("DESeq2_results2.csv",header = T)
+y <- cbind(a[,8:ncol(a)])
+meta=a[,1:7] 
+colnames(y)
+rownames(y) <- meta$miRNA
+#yy=data.frame(id=meta[,1],yy=y)
+b <- factor(rep(c("ck","uvb"),each=3))
+colData=data.frame(rownames = colnames(y),b)  
+dds <- DESeqDataSetFromMatrix(countData = y,
+                              colData = colData,
+                              design = ~ b) 
+dds
+dds <- dds[rowSums(counts(dds)) > 1, ] 
+#dds
+#dds <- estimateSizeFactors(dds)
+#dds <- estimateDispersions(dds)
+#dds <- nbinomWaldTest(dds) 
+#normalized_counts <- counts(dds,normalized=T)
+#dds
+#dds <- DESeq(normalized_counts )
+#dds
+dds <- DESeq(dds)
+resultsNames(dds)
+res=results(dds) 
+summary(res)
+res=res[order(res$padj),] 
+summary(res)
+resdata=merge(as.data.frame(res),as.data.frame(counts(dds,normalize=TRUE)),by="row.names",sort=FALSE)
+write.csv(resdata,file = "all_ck_vs_uvb.csv",row.names = F) 
+sum(res$padj < 0.05& (res$log2FoldChange >1 | res$log2FoldChange < -1), na.rm=TRUE)
+diff_gene_deseq=subset(res,padj<0.05 & (log2FoldChange >1 | log2FoldChange < -1))
+summary(diff_gene_deseq)
+head(diff_gene_deseq)
+diff_gene_deseq_data=merge(as.data.frame(diff_gene_deseq),as.data.frame(counts(dds,normalize=TRUE)),by="row.names",sort=FALSE)
+write.csv(diff_gene_deseq_data,file = "chayi_ck_vs_uvb.csv",row.names = F)
+?paste0
+diff_gene_deseq2 <-subset(res,padj < 0.01 & (log2FoldChange > 1 | log2FoldChange < -1))
+up_diff_gene_deseq2 <-subset(res,padj < 0.01 & log2FoldChange > 1)
+down_diff_gene_deseq2 <-subset(res,padj < 0.01 & log2FoldChange < -1)
+print(paste0("The total DEG number:",dim(diff_gene_deseq2[1])))
+print(paste0("The total up-DEG number:",dim(up_diff_gene_deseq2[1])))
+print(paste0("The total down-DEG number:",dim(down_diff_gene_deseq2[1])))
+
+#查看样本重复性
+library(corrplot)
+library(pheatmap)
+corrplot(cor(log2(y+1))) 
+pheatmap(scale(cor(log2(y+1))))
+#样本间关系热图（总体相似度）
+rld <- rlog(object=dds,blind=F) 
+library(pheatmap)
+library(RColorBrewer)
+sampleDist <- dist(t(assay(rld))) 
+sampleDistMatrix <- as.matrix(sampleDist)  #样品间距离的矩阵
+rownames(sampleDistMatrix) <- paste0(colData$rownames,"-", b)
+colnames(sampleDistMatrix) <- NULL
+head(sampleDistMatrix)  #样品间距离的数据框
+colors <- colorRampPalette(rev(brewer.pal(9,"Blues")))(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDist,
+         clustering_distance_cols=sampleDist,
+         color = colors)
+
+#多维尺度分析（multidimensional scaling，MDS）或主坐标分析（principal coordinates analysis，PCoA）
+library(ggplot2)
+#把样本之间的距离转化成二维坐标,在降维过程中保证样品点之间的距离不变
+#MDS基于最小线性距离(欧氏距离)的聚类,与PCA的最大线性相关是一样的
+#适合在没有表达矩阵值,但只有一个距离矩阵的情况下使用
+vsd <- vst(object=dds,blind=T) 
+mdsdata <- data.frame(cmdscale(sampleDistMatrix))
+#cmdscale(classical multidimensional scaling)
+mdsdata  #返回MDS的坐标
+mds <- cbind(mdsdata,as.data.frame(colData(vsd)))
+mds  #按列合并
+mds$e <- rep(c("N","I"),each=15)
+ggplot(data=mds,aes(X1,X2,color=b,shape=e)) +
+  geom_point(size=3)
+
+#主成分分析（Principal Component Analysis，PCA）
+library("ggrepel")
+pcadata <- plotPCA(vsd,intgroup = c("rownames","b"), returnData=TRUE)
+percentVar <- round(100*attr(pcadata,"percentVar"),1)
+ggplot(pcadata, aes(PC1, PC2, color=b, shape=mds$e)) + 
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) +
+  geom_text_repel(aes(PC1, PC2,color=b,label=colnames(vsd)),size=3) +
+  theme_bw()
